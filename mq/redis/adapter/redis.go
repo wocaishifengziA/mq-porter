@@ -10,7 +10,7 @@ import (
 type RedisMessageClient struct {
 	URI     string
 	redis   *redis.Client
-	pubsub  *redis.PubSub
+	pubSub  *redis.PubSub
 	channel chan *Message
 	mu      *sync.RWMutex
 }
@@ -29,19 +29,20 @@ func (c *RedisMessageClient) Connect() error {
 	}
 	client := redis.NewClient(opt)
 	c.redis = client
-	c.pubsub = client.Subscribe()
-	err = c.pubsub.Ping()
+	c.pubSub = client.Subscribe()
+	err = c.pubSub.Ping()
+	fmt.Println(err)
 	return err
 }
 
-// Close bala
+// Close
 func (c *RedisMessageClient) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var err error
-	if c.pubsub != nil {
-		err = c.pubsub.Close()
-		c.pubsub = nil
+	if c.pubSub != nil {
+		err = c.pubSub.Close()
+		c.pubSub = nil
 		if c.channel != nil {
 			// c.channel <- nil
 			close(c.channel)
@@ -69,15 +70,15 @@ func (c *RedisMessageClient) IsClosed() bool {
 	return true
 }
 
-func (c *RedisMessageClient) getPubsub() *redis.PubSub {
-	if c.pubsub == nil {
+func (c *RedisMessageClient) getPubSub() *redis.PubSub {
+	if c.pubSub == nil {
 		for {
 			if err := c.Connect(); err == nil {
 				break
 			}
 		}
 	}
-	return c.pubsub
+	return c.pubSub
 }
 
 func (c *RedisMessageClient) getRedis() *redis.Client {
@@ -93,18 +94,17 @@ func (c *RedisMessageClient) getRedis() *redis.Client {
 
 // Subscribe
 func (c *RedisMessageClient) Subscribe(topics ...string) error {
-	return c.getPubsub().Subscribe(topics...)
+	return c.getPubSub().Subscribe(topics...)
 }
 
 // Unsubscribe bala
 func (c *RedisMessageClient) Unsubscribe(topics ...string) error {
-	return c.getPubsub().Unsubscribe(topics...)
+	return c.getPubSub().Unsubscribe(topics...)
 }
 
 // AllTopics bala
 func (c *RedisMessageClient) AllTopics() (topics []string, err error) {
 	result := c.getRedis().PubSubChannels("*")
-
 	if result == nil || result.Err() != nil {
 		return nil, result.Err()
 	}
@@ -121,14 +121,13 @@ func (c *RedisMessageClient) GetChan() <-chan *Message {
 		c.channel = make(chan *Message)
 		go func() {
 			var msg *redis.Message
-			channel := c.getPubsub().Channel()
+			channel := c.getPubSub().Channel()
 			for {
 				msg = <-channel
 				c.channel <- &Message{topic: msg.Channel, data: msg.Payload}
 			}
 		}()
 	}
-
 	return c.channel
 }
 
@@ -139,4 +138,11 @@ func (c *RedisMessageClient) Publish(topic string, message interface{}) error {
 		return result.Err()
 	}
 	return nil
+}
+
+func NewRedisMessageClient(uri string) *RedisMessageClient {
+	return &RedisMessageClient{
+		URI: uri,
+		mu: new(sync.RWMutex),
+	}
 }
